@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LET AI Reviewer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <a href="#" class="brand" data-go="home">LET AI Reviewer</a>
+  <nav><button class="link" data-go="create">Create Reviewer</button><button class="link" data-go="settings">Practice Test</button><button class="link hidden" id="myBtn" data-go="mine">My Reviewers</button><button class="btn small" id="authBtn">Sign in with Google</button></nav>
+</header>
+
+<main>
+<section id="home" class="view">
+  <div class="hero">
+    <h1>Turn your LET reviewer into an interactive practice test.</h1>
+    <p>Paste your existing multiple-choice reviewer and turn it into a randomized practice exam.</p>
+    <div class="row"><button class="btn primary" data-go="create">Create Reviewer</button><button class="btn" data-go="settings">Start Practice Test</button></div>
+  </div>
+  <div class="features">
+    <div><h3>AI-Powered Parsing</h3><p>Paste your reviewer and convert it into structured questions.</p></div>
+    <div><h3>Smart Randomization</h3><p>Randomize questions and choices while keeping the correct answers intact.</p></div>
+    <div><h3>Practice Tests</h3><p>Choose how many questions you want to answer.</p></div>
+    <div><h3>Instant Results</h3><p>Get your score and review your mistakes immediately.</p></div>
+  </div>
+</section>
+
+<section id="create" class="view wrap hidden">
+  <h2>Create Reviewer</h2>
+  <label for="title">Reviewer title</label>
+  <input id="title" placeholder="LET Professional Education Reviewer">
+  <label for="raw">Paste reviewer</label>
+  <textarea id="raw" rows="16" placeholder="Paste your reviewer here...
+
+Example:
+
+1. Which of the following is the primary purpose of assessment?
+
+A. Ranking students
+B. Measuring learning
+C. Punishing students
+D. Giving grades
+
+Answer: B
+
+2. Which theory focuses on learning through observation?
+
+A. Behaviorism
+B. Cognitivism
+C. Social Learning Theory
+D. Constructivism
+
+Answer: C"></textarea>
+  <p class="muted"><span id="chars">0</span> characters <span id="qcount"></span></p>
+  <p id="createMsg" class="msg" role="alert"></p>
+  <div class="row"><button id="parseBtn" class="btn primary">Parse Reviewer</button><button id="clearBtn" class="btn">Clear</button></div>
+</section>
+
+<section id="preview" class="view wrap hidden">
+  <h2>Reviewer Preview</h2>
+  <p class="muted"><strong id="pvTitle"></strong> · <span id="pvCount"></span></p>
+  <p id="pvWarn" class="msg" role="alert"></p>
+  <div id="pvList"></div>
+  <p id="pvMsg" class="msg" role="alert"></p>
+  <div class="row"><button id="addQ" class="btn">+ Add Question</button><button id="saveRev" class="btn">Save Reviewer</button><button id="toSettings" class="btn primary">Continue to Test Settings</button></div>
+</section>
+
+<section id="mine" class="view wrap hidden">
+  <h2>My Reviewers</h2><p id="mineMsg" class="msg" role="alert"></p><div id="mineList"></div>
+  <h2 style="margin-top:2rem">Recent Results</h2><div id="resList"></div>
+</section>
+
+<section id="settings" class="view wrap hidden">
+  <h2>Test Settings</h2>
+  <p class="muted">Reviewer: <strong id="stTitle"></strong><br>Questions available: <strong id="stAvail"></strong></p>
+  <div id="stEmpty" class="msg hidden">No reviewer yet. Create one first.</div>
+  <div id="stForm">
+    <label for="qCount">Number of questions</label><select id="qCount"></select>
+    <label class="check"><input type="checkbox" id="shQ" checked> Shuffle questions</label>
+    <label class="check"><input type="checkbox" id="shC" checked> Shuffle choices</label>
+    <label class="check"><input type="checkbox" id="timerOn"> Enable timer</label>
+    <select id="timerMin" class="hidden" aria-label="Timer length"><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">60 minutes</option><option value="90">90 minutes</option><option value="120">120 minutes</option></select>
+    <div class="row"><button id="startBtn" class="btn primary">Start Test</button></div>
+  </div>
+</section>
+
+<section id="test" class="view wrap hidden">
+  <div class="testhead">
+    <div><strong id="tTitle"></strong><div class="muted" id="tPos"></div></div>
+    <div id="timerBox" class="timer hidden"><span class="muted">Time remaining</span><b id="timer">--:--</b></div>
+  </div>
+  <div class="bar"><div id="barFill"></div></div>
+  <div class="testgrid">
+    <div class="card"><p id="tQ" class="qtext"></p><div id="tChoices"></div>
+      <div class="row between"><button id="prev" class="btn">Previous</button><button id="next" class="btn primary">Next</button></div>
+    </div>
+    <aside class="card"><div class="muted">Question navigator</div><div id="nav" class="nav"></div><button id="submitBtn" class="btn primary full">Submit Test</button></aside>
+  </div>
+</section>
+
+<section id="results" class="view wrap hidden">
+  <h2>Results</h2>
+  <div class="score"><b id="rScore"></b><span id="rPct"></span></div>
+  <div class="stats"><div class="ok">Correct <b id="rC"></b></div><div class="bad">Incorrect <b id="rI"></b></div><div class="skip">Unanswered <b id="rU"></b></div></div>
+  <div class="row"><button id="reviewBtn" class="btn primary">Review Answers</button><button id="retake" class="btn">Retake Test</button><button id="backRev" class="btn">Back to Reviewer</button></div>
+</section>
+
+<section id="review" class="view wrap hidden">
+  <h2>Answer Review</h2>
+  <div id="rvList"></div>
+  <div class="row"><button class="btn" data-go="results">Back to Results</button></div>
+</section>
+</main>
+
+<dialog id="editDlg">
+  <form method="dialog" id="editForm">
+    <h3>Edit question</h3>
+    <label for="eQ">Question</label><textarea id="eQ" rows="3"></textarea>
+    <div id="eChoices"></div>
+    <label for="eAns">Correct answer</label><select id="eAns"></select>
+    <p id="eMsg" class="msg"></p>
+    <div class="row"><button type="button" id="eSave" class="btn primary">Save Changes</button><button type="button" id="eCancel" class="btn">Cancel</button></div>
+  </form>
+</dialog>
+
+<dialog id="subDlg">
+  <h3>Are you sure you want to submit?</h3>
+  <p id="subMsg"></p>
+  <div class="row"><button id="subCancel" class="btn">Cancel</button><button id="subOk" class="btn primary">Submit Test</button></div>
+</dialog>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-client.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
