@@ -1,0 +1,1 @@
+{ "functions": { "api/parse-reviewer.js": { "maxDuration": 60 }, "api/explain-answer.js": { "maxDuration": 30 } } }
