@@ -75,7 +75,7 @@ dialog h3{margin:0 0 .5rem}
 .pick:hover{border-color:var(--ok)}
 .pick.right{border-color:var(--ok);background:#ecf8f0}
 .pick.right b{background:var(--ok);color:#fff}
-.pick.right::after{content:"✓ Correct";margin-left:auto;color:var(--ok);font-weight:700;font-size:.85rem;white-space:nowrap}
+.pick.right::after{content:"✓ Answer key";margin-left:auto;color:var(--ok);font-weight:700;font-size:.85rem;white-space:nowrap}
 .rvhead{display:flex;justify-content:space-between;align-items:center}
 .pts{font-weight:700;padding:.15rem .7rem;border-radius:99px;color:#fff}
 .rv.ok .pts{background:var(--ok)}.rv.bad .pts{background:var(--bad)}.rv.skip .pts{background:var(--warn)}
