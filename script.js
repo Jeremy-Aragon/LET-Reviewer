@@ -136,7 +136,8 @@ $("parseBtn").onclick = async () => {
 function previewSummary() {
   const qs = appState.reviewer.questions, bad = qs.filter(q => questionProblem(q)).length;
   $("pvTitle").textContent = appState.reviewer.title; $("pvCount").textContent = `${qs.length} Questions`;
-  $("pvWarn").textContent = bad ? `⚠ ${bad} question(s) still need an answer. Tap the correct choice on each red card.` : "";
+  $("pvWarn").className = "msg" + (bad ? "" : " good");
+  $("pvWarn").textContent = bad ? `⚠ ${bad} question(s) still need an answer key. Tap the correct choice on each red card.` : "✓ Every question has an answer key. Tap a different choice to change it, then continue.";
   $("toSettings").disabled = bad > 0 || !qs.length;
 }
 function fillCard(card, q, i) {
