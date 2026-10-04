@@ -20,14 +20,39 @@ function loadState() {
 }
 function clearState() { localStorage.removeItem(STORE_KEY); }
 
-/* ===== AI integration points (connect Gemini here) ===== */
+/* ===== AI calls (Gemini runs server-side in /api; no key in the browser) ===== */
+async function authHeaders() {
+  const h = { "Content-Type": "application/json" };
+  try { const { data } = await supabaseClient.auth.getSession(); if (data.session) h.Authorization = "Bearer " + data.session.access_token; } catch (e) {}
+  return h;
+}
+async function callApi(path, body) {
+  let res;
+  try { res = await fetch(path, { method: "POST", headers: await authHeaders(), body: JSON.stringify(body) }); }
+  catch (e) { throw new Error("Network error. Check your connection and try again."); }
+  let data = null; try { data = await res.json(); } catch (e) {}
+  if (!res.ok) throw new Error(data?.error || (res.status === 404 ? "AI endpoint not found. Run the site with `vercel dev` or deploy it to Vercel." : "The AI request failed. Please try again."));
+  return data;
+}
+/* Long reviewers are sent in chunks of 25 questions to stay fast and within output limits. */
+function chunkReviewer(raw, size = 25) {
+  if (/answer\s*key/i.test(raw)) return [raw]; // a separate answer key must stay with its questions
+  const parts = raw.split(/\n\s*(?=\d+[.)]\s)/);
+  if (parts.length <= size) return [raw];
+  const chunks = [];
+  for (let i = 0; i < parts.length; i += size) chunks.push(parts.slice(i, i + size).join("\n"));
+  return chunks;
+}
 async function parseReviewerWithAI(rawText) {
-  // Gemini API integration will be added by me.
-  // Until then, returning undefined makes the app use localFallbackParser below.
+  const chunks = chunkReviewer(rawText), questions = [];
+  for (let i = 0; i < chunks.length; i++) {
+    if (chunks.length > 1) $("parseBtn").textContent = `Parsing ${i + 1} of ${chunks.length}...`;
+    questions.push(...(await callApi("/api/parse-reviewer", { text: chunks[i] })).questions);
+  }
+  return { title: "", questions: questions.map((q, i) => ({ ...q, id: "q" + (i + 1) })) };
 }
 async function explainAnswerWithAI(questionData) {
-  // Gemini API integration will be added by me.
-  // questionData: { question, choices, correctIndex, userIndex }
+  return (await callApi("/api/explain-answer", questionData)).explanation;
 }
 
 /* Simple offline parser so the UI works before Gemini is connected. Handles "1. text / A. choice / Answer: B". */
@@ -103,32 +128,37 @@ $("parseBtn").onclick = async () => {
     appState.reviewer = { title: $("title").value.trim() || data.title || title, questions: data.questions };
     $("qcount").textContent = `· ${data.questions.length} questions found`;
     showView("preview");
-  } catch (err) { msg.textContent = "Parsing failed. Please try again."; console.error(err); }
+  } catch (err) { msg.textContent = err.message || "Parsing failed. Please try again."; console.error(err); }
   finally { btn.disabled = false; btn.textContent = "Parse Reviewer"; }
 };
 
 /* ===== Preview & edit ===== */
+function previewSummary() {
+  const qs = appState.reviewer.questions, bad = qs.filter(q => questionProblem(q)).length;
+  $("pvTitle").textContent = appState.reviewer.title; $("pvCount").textContent = `${qs.length} Questions`;
+  $("pvWarn").textContent = bad ? `⚠ ${bad} question(s) still need an answer. Tap the correct choice on each red card.` : "";
+  $("toSettings").disabled = bad > 0 || !qs.length;
+}
+function fillCard(card, q, i) {
+  const p = questionProblem(q);
+  card.className = "qcard" + (p ? " invalid" : "");
+  card.innerHTML = `<div class="qhead"><span>Question ${i + 1}</span><span><button class="btn small" data-edit="${i}">Edit</button> <button class="btn small danger" data-del="${i}">Delete</button></span></div>
+    ${p ? `<p class="warnline">⚠ Question ${i + 1} ${p}. ${/valid answer/.test(p) ? "Tap the correct choice below." : "Use Edit to fix it."}</p>` : ""}
+    <p>${esc(q.question || "")}</p>
+    <div class="picks">${(q.choices || []).map((c, k) => `<button class="pick${q.answer === k ? " right" : ""}" data-pick="${i}:${k}" aria-pressed="${q.answer === k}"><b>${L(k)}</b><span>${esc(c)}</span></button>`).join("")}</div>`;
+}
 function renderPreview() {
-  const { title, questions } = appState.reviewer;
-  $("pvTitle").textContent = title; $("pvCount").textContent = `${questions.length} Questions`;
-  const bad = questions.map((q, i) => questionProblem(q) ? i : -1).filter(i => i >= 0);
-  $("pvWarn").textContent = bad.length ? `⚠ ${bad.length} question(s) need fixing before you can continue.` : "";
-  $("toSettings").disabled = bad.length > 0 || !questions.length;
-  $("pvList").innerHTML = "";
-  questions.forEach((q, i) => {
-    const p = questionProblem(q), card = document.createElement("div");
-    card.className = "qcard" + (p ? " invalid" : "");
-    const choices = (q.choices || []).map(c => `<li>${esc(c)}</li>`).join("");
-    card.innerHTML = `<div class="qhead"><span>Question ${i + 1}</span><span><button class="btn small" data-edit="${i}">Edit</button> <button class="btn small danger" data-del="${i}">Delete</button></span></div>
-      ${p ? `<p class="warnline">⚠ Question ${i + 1} ${p}. Please edit this question before continuing.</p>` : ""}
-      <p>${esc(q.question || "")}</p><ol>${choices}</ol>
-      <div class="muted">Correct Answer: <strong>${Number.isInteger(q.answer) && q.choices && q.answer < q.choices.length ? L(q.answer) : "—"}</strong></div>`;
-    $("pvList").appendChild(card);
-  });
+  previewSummary(); $("pvList").innerHTML = "";
+  appState.reviewer.questions.forEach((q, i) => { const c = document.createElement("div"); fillCard(c, q, i); $("pvList").appendChild(c); });
 }
 function esc(s) { const d = document.createElement("div"); d.textContent = s ?? ""; return d.innerHTML; }
 $("pvList").addEventListener("click", e => {
   const ed = e.target.closest("[data-edit]"), del = e.target.closest("[data-del]");
+  const pk = e.target.closest("[data-pick]");
+  if (pk) { // tap a choice = mark it as the correct answer, updating just that card
+    const [i, k] = pk.dataset.pick.split(":").map(Number), q = appState.reviewer.questions[i];
+    q.answer = k; saveState(); fillCard(pk.closest(".qcard"), q, i); previewSummary(); return;
+  }
   if (ed) openEdit(+ed.dataset.edit);
   if (del && confirm("Delete this question?")) { appState.reviewer.questions.splice(+del.dataset.del, 1); saveState(); renderPreview(); }
 });
@@ -269,10 +299,13 @@ function renderReview() {
     const a = t.answers[i], st = a === undefined ? "skip" : a === q.answer ? "ok" : "bad";
     const tag = { ok: "✓ Correct", bad: "❌ Incorrect", skip: "⚠ Unanswered" }[st];
     const d = document.createElement("div"); d.className = "rv " + st;
-    d.innerHTML = `<div class="muted"><strong>Question ${i + 1}</strong></div><p>${esc(q.question)}</p>
-      <div><span class="muted">Your Answer:</span> ${a === undefined ? "—" : `${L(a)}. ${esc(q.choices[a])}`}</div>
-      <div><span class="muted">Correct Answer:</span> ${L(q.answer)}. ${esc(q.choices[q.answer])}</div>
-      <p class="tag">${tag}</p><button class="btn small">Explain Answer</button><div class="expl hidden"></div>`;
+    d.innerHTML = `<div class="rvhead"><strong>Question ${i + 1}</strong><span class="pts">${st === "ok" ? "1/1" : "0/1"}</span></div><p>${esc(q.question)}</p>
+      <div class="rvchoices">${q.choices.map((c, k) => {
+        const right = k === q.answer, mine = k === a;
+        const label = right && mine ? "Your answer ✓" : right ? "Correct answer" : mine ? "Your answer ✗" : "";
+        return `<div class="rc${right ? " right" : ""}${mine && !right ? " wrong" : ""}"><b>${L(k)}</b><span>${esc(c)}</span>${label ? `<em>${label}</em>` : ""}</div>`;
+      }).join("")}</div>
+      <p class="tag">${tag}${st === "skip" ? " — no answer selected" : ""}</p><button class="btn small">Explain Answer</button><div class="expl hidden"></div>`;
     const btn = d.querySelector("button"), box = d.querySelector(".expl");
     btn.onclick = async () => {
       box.classList.remove("hidden"); box.textContent = "Loading...";
@@ -344,6 +377,15 @@ async function saveResult(r) {
   });
   if (error) console.error(error);
 }
+
+/* ===== Keyboard shortcuts in the test: A-D select, arrows move ===== */
+document.addEventListener("keydown", e => {
+  if (appState.currentView !== "test" || document.querySelector("dialog[open]") || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+  const t = appState.test, q = t.questions[t.currentQuestion], idx = "abcdefgh".indexOf(e.key.toLowerCase());
+  if (e.key.length === 1 && idx >= 0 && q && idx < q.choices.length) { t.answers[t.currentQuestion] = idx; saveState(); renderTest(); }
+  else if (e.key === "ArrowRight" && !$("next").disabled) $("next").click();
+  else if (e.key === "ArrowLeft" && !$("prev").disabled) $("prev").click();
+});
 
 /* ===== Init ===== */
 loadState();
