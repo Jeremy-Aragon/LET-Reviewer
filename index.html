@@ -12,7 +12,7 @@
 <body>
 <header class="topbar">
   <a href="#" class="brand" data-go="home">LET AI Reviewer</a>
-  <nav><button class="link" data-go="create">Create Reviewer</button><button class="link" data-go="settings">Practice Test</button><button class="link hidden" id="myBtn" data-go="mine">My Reviewers</button><button class="btn small" id="authBtn">Sign in with Google</button></nav>
+  <nav><button class="link" data-go="create">Create Reviewer</button><button class="link" data-go="settings">Practice Test</button><button class="link" data-go="pub">Public Reviewers</button><button class="link hidden" id="myBtn" data-go="mine">My Reviewers</button><button class="btn small" id="authBtn">Sign in with Google</button></nav>
 </header>
 
 <main>
@@ -73,6 +73,11 @@ Answer: C"></textarea>
 <section id="mine" class="view wrap hidden">
   <h2>My Reviewers</h2><p id="mineMsg" class="msg" role="alert"></p><div id="mineList"></div>
   <h2 style="margin-top:2rem">Recent Results</h2><div id="resList"></div>
+</section>
+
+<section id="pub" class="view wrap hidden">
+  <h2>Public Reviewers</h2><p class="muted">Reviewers shared by other users. Anyone can take these tests, no sign-in needed.</p>
+  <p id="pubMsg" class="msg" role="alert"></p><div id="pubList"></div>
 </section>
 
 <section id="settings" class="view wrap hidden">
