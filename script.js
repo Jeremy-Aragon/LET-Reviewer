@@ -62,7 +62,7 @@ function localFallbackParser(raw, title) {
     const m = block.trim().match(/^\d+[.)]\s+([\s\S]*?)\n\s*A[.)]\s/);
     if (!m) return;
     const choices = [...block.matchAll(/^\s*([A-H])[.)]\s+(.+)$/gm)].map(x => x[2].trim());
-    const a = block.match(/answer\s*[:\-]?\s*\(?([A-H])\)?/i);
+    const a = block.match(/(?:correct(?:\s*answer)?|answer|ans)\s*[:\-]?\s*\(?([A-H])\b/i);
     questions.push({ id: "q" + (questions.length + 1), question: m[1].replace(/\s+/g, " ").trim(), choices, answer: a ? a[1].toUpperCase().charCodeAt(0) - 65 : null, explanation: null });
   });
   return { title, questions };
@@ -121,13 +121,21 @@ $("parseBtn").onclick = async () => {
   if (!raw) { msg.textContent = "Paste your reviewer text first."; return; }
   btn.disabled = true; btn.textContent = "Parsing...";
   try {
-    const data = (await parseReviewerWithAI(raw)) || localFallbackParser(raw, title);
+    let data, fallbackMessage = "";
+    try { data = await parseReviewerWithAI(raw); }
+    catch (err) {
+      data = localFallbackParser(raw, title);
+      if (!data.questions.length) throw err;
+      fallbackMessage = "AI unavailable; using the basic local parser. Review each parsed question before continuing.";
+    }
+    data = data || localFallbackParser(raw, title);
     const v = validateReviewer(data);
     if (!v.ok) { msg.textContent = v.error; return; }
     data.questions.forEach((q, i) => { q.id = q.id || "q" + (i + 1); });
     appState.reviewer = { title: $("title").value.trim() || data.title || title, questions: data.questions };
     $("qcount").textContent = `· ${data.questions.length} questions found`;
     showView("preview");
+    if (fallbackMessage) $("pvWarn").textContent = [$("pvWarn").textContent, fallbackMessage].filter(Boolean).join(" ");
   } catch (err) { msg.textContent = err.message || "Parsing failed. Please try again."; console.error(err); }
   finally { btn.disabled = false; btn.textContent = "Parse Reviewer"; }
 };
