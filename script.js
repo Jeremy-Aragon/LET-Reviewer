@@ -106,6 +106,7 @@ function showView(name) {
   if (name === "results") renderResults();
   if (name === "review") renderReview();
   if (name === "mine") renderMine();
+  if (name === "pub") renderPub();
   window.scrollTo(0, 0);
   saveState();
 }
@@ -351,17 +352,27 @@ async function renderMine() {
   const msg = $("mineMsg"); msg.textContent = "";
   if (!currentUser) { msg.textContent = "Sign in with Google to see your saved reviewers."; $("mineList").innerHTML = ""; $("resList").innerHTML = ""; return; }
   const [rv, rs] = await Promise.all([
-    supabaseClient.from("reviewers").select("id,title,question_count,questions_json").order("created_at", { ascending: false }),
+    supabaseClient.from("reviewers").select("id,title,question_count,questions_json,is_public").eq("user_id", currentUser.id).order("created_at", { ascending: false }),
     supabaseClient.from("test_results").select("reviewer_title,score,total_questions,percentage,created_at").order("created_at", { ascending: false }).limit(10)
   ]);
   if (rv.error || rs.error) { msg.textContent = "Could not load your data. Please try again."; return; }
   $("mineList").innerHTML = rv.data.length ? "" : `<p class="muted">No saved reviewers yet. Create one to get started.</p>`;
   rv.data.forEach(r => {
     const d = document.createElement("div"); d.className = "qcard";
-    d.innerHTML = `<div class="qhead"><span>${esc(r.title)} · ${r.question_count} questions</span><span><button class="btn small primary">Open</button> <button class="btn small danger">Delete</button></span></div>`;
-    const [open, del] = d.querySelectorAll("button");
-    open.onclick = () => { appState.reviewer = { id: r.id, title: r.title, questions: r.questions_json }; showView("settings"); };
-    del.onclick = async () => { if (!confirm("Delete this reviewer?")) return; await supabaseClient.from("reviewers").delete().eq("id", r.id); renderMine(); };
+    d.innerHTML = `<div class="qhead"><span>${esc(r.title)} · ${r.question_count} questions${r.is_public ? " · Public" : ""}</span><span><button class="btn small primary op">Open</button> <button class="btn small sh">${r.is_public ? "Copy link" : "Share"}</button>${r.is_public ? ' <button class="btn small pv">Make private</button>' : ""} <button class="btn small danger dl">Delete</button></span></div>`;
+    const q = c => d.querySelector(c);
+    q(".op").onclick = () => { appState.reviewer = { id: r.id, title: r.title, questions: r.questions_json }; showView("settings"); };
+    q(".dl").onclick = async () => { if (!confirm("Delete this reviewer?")) return; await supabaseClient.from("reviewers").delete().eq("id", r.id); renderMine(); };
+    q(".sh").onclick = async () => {
+      if (!r.is_public) {
+        const { error } = await supabaseClient.from("reviewers").update({ is_public: true }).eq("id", r.id);
+        if (error) { msg.textContent = "Could not share this reviewer. Run public-sharing.sql in Supabase first."; return; }
+      }
+      const link = `${location.origin}${location.pathname}?r=${r.id}`;
+      try { await navigator.clipboard.writeText(link); alert("Link copied. Anyone with it can take this test:\n" + link); } catch (e) { prompt("Copy this link:", link); }
+      renderMine();
+    };
+    if (r.is_public) q(".pv").onclick = async () => { await supabaseClient.from("reviewers").update({ is_public: false }).eq("id", r.id); renderMine(); };
     $("mineList").appendChild(d);
   });
   $("resList").innerHTML = rs.data.length
@@ -372,14 +383,36 @@ async function saveResult(r) {
   if (!currentUser) return;
   const t = appState.test;
   const { error } = await supabaseClient.from("test_results").insert({
-    user_id: currentUser.id, reviewer_id: appState.reviewer.id ?? null, reviewer_title: appState.reviewer.title,
+    user_id: currentUser.id, reviewer_id: appState.reviewer.id ?? appState.reviewer.sourceId ?? null, reviewer_title: appState.reviewer.title,
     score: r.correct, total_questions: r.total, percentage: r.percentage, answers_json: { answers: t.answers, questions: t.questions }
   });
   if (error) console.error(error);
 }
 
+/* ===== Public reviewers: anyone can browse and take them, no sign-in needed ===== */
+async function renderPub() {
+  const m = $("pubMsg"), list = $("pubList"); m.textContent = ""; list.innerHTML = `<p class="muted">Loading...</p>`;
+  const { data, error } = await supabaseClient.from("reviewers").select("id,title,question_count").eq("is_public", true).order("created_at", { ascending: false }).limit(50);
+  if (error) { m.textContent = "Could not load public reviewers. Please try again."; list.innerHTML = ""; return; }
+  list.innerHTML = data.length ? "" : `<p class="muted">No public reviewers yet.</p>`;
+  data.forEach(r => {
+    const d = document.createElement("div"); d.className = "qcard";
+    d.innerHTML = `<div class="qhead"><span>${esc(r.title)} · ${r.question_count} questions</span><button class="btn small primary">Take test</button></div>`;
+    d.querySelector("button").onclick = () => openShared(r.id);
+    list.appendChild(d);
+  });
+}
+async function openShared(id) {
+  const { data, error } = await supabaseClient.from("reviewers").select("id,title,questions_json").eq("id", id).maybeSingle();
+  if (error || !data) { alert("This reviewer is private or no longer exists."); return showView("home"); }
+  appState.reviewer = { sourceId: data.id, title: data.title, questions: data.questions_json }; // a copy; the owner's original is never changed
+  showView("settings");
+}
+
 /* ===== Init ===== */
 loadState();
 initAuth();
-if (appState.currentView === "test" && appState.test.endsAt && Date.now() > appState.test.endsAt && !appState.test.submittedAt) submitTest();
+const sharedId = new URLSearchParams(location.search).get("r");
+if (sharedId) openShared(sharedId);
+else if (appState.currentView === "test" && appState.test.endsAt && Date.now() > appState.test.endsAt && !appState.test.submittedAt) submitTest();
 else showView(["test", "results", "review"].includes(appState.currentView) && !appState.test.questions.length ? "home" : appState.currentView);
